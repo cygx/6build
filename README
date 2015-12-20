@@ -1,0 +1,26 @@
+NAME
+    6build - Yet another build system
+
+SYNOPSIS
+        6build status
+
+        6build config win32 --debug
+        6build make test
+
+        6build tryconfig --no-debug
+        6build make test
+
+        6build reconfig --no-debug
+        6build make install
+
+        6build autoconf
+        6build make test
+
+        6build automake test install
+
+COPYRIGHT AND LICENSE
+    Copyright (C) 2015 by cygx <mailto:cygx@cpan.org>
+
+    Distributed under the Boost Software License, Version 1.0
+    <http://www.boost.org/LICENSE_1_0.txt>
+

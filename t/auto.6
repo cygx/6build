@@ -1,0 +1,26 @@
+--shell=cmd
+cmd /c "echo ok"
+
+--shell=sh
+sh -c 'echo ok'
+
+?--shell=cmd --os=* --arch=*
+cmd /c sys.bat
+
+?--shell=sh --os=* --arch=*
+sh sys.sh
+
+?--os=win32 CC=*
+cl /nologo /E /DKEY=CC /DVALUE=cl kv.c
+
+CC=*
+clang -E -DKEY=CC -DVALUE=clang kv.c
+gcc   -E -DKEY=CC -DVALUE=gcc   kv.c
+c99   -E -DKEY=CC -DVALUE=c99   kv.c
+cc    -E -DKEY=CC -DVALUE=cc    kv.c
+
+--ccache
+ccache -V
+
+--has-stdbool
+$CC -E stdbool.c
