@@ -7,6 +7,13 @@ use strict;
 use warnings;
 
 my ($build, %configs, %flags, %vars);
+my $verbose = 0;
+my $quiet = 0;
+
+sub say { print @_, "\n" unless $quiet }
+sub cry { warn @_, "\n" unless $quiet }
+sub println { print @_, "\n" }
+sub note { print @_, "\n" if $verbose }
 
 sub words {
     local $_ = @_ ? $_[0] : $_;
@@ -26,7 +33,7 @@ sub parse_args {
     # TODO: parse --no-
     for (@_) {
         if (/^\w+$/) {
-            warn "Replacing build '$build' with '$_'\n"
+            cry "Replacing build '$build' with '$_'"
                 if defined $build;
             $build = $_;
             next;
@@ -37,7 +44,7 @@ sub parse_args {
             unless defined($name) && (defined($flag) || defined($value));
 
         if (!defined($flag)) {
-            warn "Replacing var '$name' with '$value'\n"
+            cry "Replacing var '$name' with '$value'"
                 if exists $vars{$name};
             $vars{$name} = $value;
         }
@@ -45,7 +52,7 @@ sub parse_args {
             $flags{$name} = 1;
         }
         else {
-            warn "Replacing config '--$name' with '$value'\n"
+            cry "Replacing config '--$name' with '$value'"
                 if exists $configs{$name};
             $configs{$name} = $value;
         }
@@ -61,7 +68,7 @@ sub autoconf {
         chomp;
         next if /^\s*$/;
 
-        print "$_\n";
+        say $_;
 
         my (@flags, @configs, @dynconfigs, @vars, @dynvars);
         my @toks = words;
@@ -113,15 +120,17 @@ sub autoconf {
                 s/<!>/$dollar/;
             }
 
-            print "$_\n";
+            say $_;
 
             my @out = map { s/\r\n$/\n/r } qx/$_ 2>&1/;
             my $code = $? >> 8;
 
-            print "| $_" for @out;
+            if ($verbose) {
+                print "| $_" for @out
+            }
 
             if ($code != 0) {
-                print "--> failed\n";
+                say '[ ] failed';
                 next;
             }
 
@@ -145,7 +154,7 @@ sub autoconf {
                 }
 
                 if (%in) {
-                    print "--> incomplete\n";
+                    say '[?] incomplete';
                     next;
                 }
 
@@ -166,7 +175,7 @@ sub autoconf {
                 }
 
                 if (%in) {
-                    print "--> incomplete\n";
+                    say '[?] incomplete';
                     next;
                 }
 
@@ -177,15 +186,15 @@ sub autoconf {
                 die 'TODO';
             }
 
-            print "--> check\n\n";
+            say '[x] check', "\n";
             goto DONE;
         }
 
-        print "\n";
+        say;
         next;
 
     SKIP:
-        print "--> skipped\n\n";
+        say '[-] skipped', "\n";
 
     DONE:
         while (<$fh>) {
@@ -194,26 +203,48 @@ sub autoconf {
         }
     }
     close $fh;
-    exit;
+
+    say 'Configuration:';
+
+    println $_ for map {
+        my ($k, $v) = ($_, $configs{$_});
+        "--$k=$v";
+    } sort keys %configs;
+
+    println $_ for map {
+        my ($k, $v) = ($_, $flags{$_});
+        next unless $v;
+        "--$_";
+    } sort keys %flags;
+
+    println $_ for map {
+        my ($k, $v) = ($_, $vars{$_});
+        "$k=$v";
+    } sort keys %vars;
 }
 
 sub help {
     print <<'EOT';
 Usage:
 
-  6build [-C[ ]<DIR>] status
+  6build [<OPT>] status
 
-  6build [-C[ ]<DIR>] config <BUILD>
+  6build [<OPT>] config [<BUILD>]
          [--<CONFIG>=<NAME>...] [--<FLAG>...] [<VAR>=<VALUE>...]
 
-  6build [-C[ ]<DIR>] make <TARGET>...
+  6build [<OPT>] make <TARGET>...
 
-  6build [-C[ ]<DIR>] {reconfig|tryconfig} [<BUILD>]
+  6build [<OPT>] {reconfig|tryconfig} [<BUILD>]
          [--<CONFIG>=<NAME>...] [--<FLAG>...] [<VAR>[~|+|-]=<VALUE>...]
          [--no-<CONFIG|FLAG|VAR>...]
 
-  6build [-C[ ]<DIR>] {autoconf|automake <TARGET>...}
+  6build [<OPT>] {autoconf|automake <TARGET>...}
          [--<CONFIG>=<NAME>...] [--<FLAG>...] [<VAR>=<VALUE>...]
+
+  <OPT> = -C[ ]<DIR>       run in directory <DIR>
+          -v               verbose output
+          -q               quiet output
+          -{v|q}C[ ]<DIR>  combined flag
 EOT
 }
 
@@ -223,10 +254,14 @@ sub unknown {
     die "Unknown $type '$_'";
 }
 
-if (@ARGV && $ARGV[0] =~ /^-C(.*)/) {
+if (@ARGV && $ARGV[0] =~ /^-([vq]?)(?:(C)(.*))?$/) {
     shift @ARGV;
-    my $dir = $1 || shift(@ARGV) || die "No dir passed to cd into";
-    chdir($dir) or die "Cannot cd into '$dir'";
+    if ($1 eq 'v') { $verbose = 1 }
+    elsif ($1 eq 'q') { $quiet = 1 }
+    if (defined $2) {
+        my $dir = $3 || shift(@ARGV) || die "No dir passed to cd into";
+        chdir($dir) or die "Cannot cd into '$dir'";
+    }
 }
 
 ({
