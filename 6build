@@ -244,7 +244,7 @@ Usage:
   <OPT> = -C[ ]<DIR>       run in directory <DIR>
           -v               verbose output
           -q               quiet output
-          -{v|q}C[ ]<DIR>  combined flag
+          -{v|q}C[ ]<DIR>  combined options
 EOT
 }
 
