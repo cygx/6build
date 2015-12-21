@@ -6,22 +6,192 @@
 use strict;
 use warnings;
 
-my %TABLE = (
-    status => sub {},
-    config => sub {},
-    reconfig => sub {},
-    tryconfig => sub {},
-    make => sub {},
-    autoconf => \&autoconf,
-    automake => sub {},
-    '-h' => \&help,
-    '--help' => \&help,
-);
+my ($build, %configs, %flags, %vars);
+
+sub words {
+    local $_ = @_ ? $_[0] : $_;
+    my @esc = /\\(.)/g;
+    s/\\./<!>/g;
+    my @words = split /\s+/;
+    for (@words) {
+        while (/<!>/) {
+            my $esc = shift @esc;
+            s/<!>/$esc/;
+        }
+    }
+    @words;
+}
+
+sub parse_args {
+    # TODO: parse --no-
+    for (@_) {
+        if (/^\w+$/) {
+            warn "Replacing build '$build' with '$_'\n"
+                if defined $build;
+            $build = $_;
+            next;
+        }
+
+        my ($flag, $name, $value) = /^(--)?(\w[\w-]*)(?:=(.*))?$/;
+        die "Failed to parse '$_'"
+            unless defined($name) && (defined($flag) || defined($value));
+
+        if (!defined($flag)) {
+            warn "Replacing var '$name' with '$value'\n"
+                if exists $vars{$name};
+            $vars{$name} = $value;
+        }
+        elsif (!defined($value)) {
+            $flags{$name} = 1;
+        }
+        else {
+            warn "Replacing config '--$name' with '$value'\n"
+                if exists $configs{$name};
+            $configs{$name} = $value;
+        }
+    }
+}
 
 sub autoconf {
+    shift;
+    parse_args(@_);
+
     open my $fh, '<', 'auto.6' or die "Failed to open 'auto.6'";
     while (<$fh>) {
         chomp;
+        next if /^\s*$/;
+
+        print "$_\n";
+
+        my (@flags, @configs, @dynconfigs, @vars, @dynvars);
+        my @toks = words;
+        for (@toks) {
+            my ($cond, $flag, $name, $value) =
+                /^([?!])?(--)?(\w[\w-]*)(?:=(.*))?$/;
+
+            die "Failed to parse '$_'"
+                unless defined($name) && (defined($flag) || defined($value));
+
+            my $store = defined($flag) ?
+                (defined($value) ? \%configs : \%flags) : \%vars;
+
+            my $exists = exists $store->{$name};
+            my $prevalue = $store->{$name} if $exists;
+
+            if (!defined $cond) {
+                goto SKIP if $exists;
+                if (!defined($flag)) {
+                    if ($value eq '*') { push @dynvars, $name }
+                    else { push @vars, [ $name, $value ] }
+                }
+                elsif (!defined($value)) {
+                    push @flags, $name;
+                }
+                else {
+                    if ($value eq '*') { push @dynconfigs, $name }
+                    else { push @configs, [ $name, $value ] }
+                }
+            }
+            elsif ($cond eq '?' && $exists) {
+                goto SKIP unless !defined($value) || $value eq $prevalue;
+            }
+            elsif ($cond eq '!' && $exists) {
+                goto SKIP unless !defined($value) || $value ne $prevalue;
+            }
+            else { die sprintf "Precondition '%s$name' not met", $flag // '' }
+        }
+
+        while (<$fh>) {
+            chomp;
+            last if /^\s*$/;
+
+            my @dollars = /\$(\$|\*?\w+)|\$\((\*?\w+)\)/g;
+            s/\$(\$|\*?\w+|\(\*?\w+\))/<!>/g;
+            while (/<!>/) {
+                shift(@dollars) =~ /^(\*)?(.+)/;
+                my $dollar = defined($1) ? $ENV{$2} : $vars{$2};
+                s/<!>/$dollar/;
+            }
+
+            print "$_\n";
+
+            my @out = map { s/\r\n$/\n/r } qx/$_ 2>&1/;
+            my $code = $? >> 8;
+
+            print "| $_" for @out;
+
+            if ($code != 0) {
+                print "--> failed\n";
+                next;
+            }
+
+            $configs{$_->[0]} = $_->[1]
+                for @configs;
+
+            $flags{$_} = 1
+                for @flags;
+
+            if (@dynconfigs) {
+                my (%in, %out);
+                @in{@dynconfigs} = ();
+
+                for (@out) {
+                    if (/^--(\w+)=(\N*)/) {
+                        if (exists $in{$1}) {
+                            $out{$1} = $2;
+                            delete $in{$1};
+                        }
+                    }
+                }
+
+                if (%in) {
+                    print "--> incomplete\n";
+                    next;
+                }
+
+                @configs{keys %out} = values %out;
+            }
+
+            if (@dynvars) {
+                my (%in, %out);
+                @in{@dynvars} = ();
+
+                for (@out) {
+                    if (/^(\w+)=(\N*)/) {
+                        if (exists $in{$1}) {
+                            $out{$1} = $2;
+                            delete $in{$1};
+                        }
+                    }
+                }
+
+                if (%in) {
+                    print "--> incomplete\n";
+                    next;
+                }
+
+                @vars{keys %out} = values %out;
+            }
+
+            if (@vars) {
+                die 'TODO';
+            }
+
+            print "--> check\n\n";
+            goto DONE;
+        }
+
+        print "\n";
+        next;
+
+    SKIP:
+        print "--> skipped\n\n";
+
+    DONE:
+        while (<$fh>) {
+            chomp;
+            last if /^\s*$/;
+        }
     }
     close $fh;
     exit;
@@ -55,11 +225,20 @@ sub unknown {
 
 if (@ARGV && $ARGV[0] =~ /^-C(.*)/) {
     shift @ARGV;
-    my $dir = $1 || shift(@ARGV) || die "No dir specified to cd into";
+    my $dir = $1 || shift(@ARGV) || die "No dir passed to cd into";
     chdir($dir) or die "Cannot cd into '$dir'";
 }
 
-($TABLE{@ARGV ? $ARGV[0] : '-h'} // \&unknown)->(@ARGV);
+({
+    status => sub { die 'TODO' },
+    config => sub { die 'TODO' },
+    reconfig => sub { die 'TODO' },
+    tryconfig => sub { die 'TODO' },
+    make => sub { die 'TODO' },
+    autoconf => \&autoconf,
+    automake => sub { die 'TODO' },
+    '-h' => \&help, '--help' => \&help,
+}->{@ARGV ? $ARGV[0] : '-h'} // \&unknown)->(@ARGV);
 
 __END__
 
