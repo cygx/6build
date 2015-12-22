@@ -59,6 +59,7 @@ if (@ARGV && $ARGV[0] =~ /^-([vq]?)(?:(C)(.*))?$/) {
 }->{@ARGV ? $ARGV[0] : '-h'} // \&unknown)->(@ARGV);
 
 my ($build, %configs, %flags, %vars);
+my (@rules, %named_rules, %output_files);
 
 sub say { print @_, "\n" unless $quiet }
 sub cry { warn @_, "\n" unless $quiet }
@@ -273,8 +274,75 @@ sub autoconf {
     } sort keys %vars;
 }
 
+my %visited;
+sub build {
+    my $rule = shift;
+
+    for (@{$rule->{out}}) {
+        die if exists $visited{$_};
+        $visited{$_} = 1;
+    }
+
+    for (@{$rule->{in}}) {
+        if (exists $output_files{$_}) {
+            die unless @{$output_files{$_}} == 1;
+            build($output_files{$_}->[0]);
+        }
+        else {
+            # TODO
+        }
+    }
+
+    say $_ for @{$rule->{body}};
+}
+
 sub make {
-    die 'TODO';
+    shift;
+    my $id = 0;
+
+    open my $fh, '<', $MAKEFILE or die "$MAKEFILE: $!";
+    while (<$fh>) {
+        chomp;
+        next if /^\s*$/;
+
+        my ($lhs, $rhs) = split />/, $_, 2;
+        my ($name, @in) = split /\|/, $lhs;
+        my @out = split /\|/, $rhs // '';
+        my @body;
+
+        my %rule;
+        $rule{id} = $id++;
+        $rule{name} = length($name) ? $name : undef;
+        $rule{in} = \@in;
+        $rule{out} = \@out;
+        $rule{body} = \@body;
+
+        if (length($name)) {
+            die "Redefinition of rule '$name'"
+                if exists $named_rules{$name};
+
+            $named_rules{$name} = \%rule;
+        }
+
+        push @{$output_files{$_}}, \%rule for @out;
+        push @rules, \%rule;
+
+        while (<$fh>) {
+            chomp;
+            last if /^\s*$/;
+            push @body, $_;
+        }
+    }
+    close $fh;
+
+    if (@_) {
+        die 'TODO';
+        for (@_) {}
+    }
+    else {
+        die 'No rules available' unless @rules;
+        build $rules[0];
+    }
 }
 
 sub help { print $USAGE }
