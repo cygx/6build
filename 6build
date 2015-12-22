@@ -53,7 +53,7 @@ if (@ARGV && $ARGV[0] =~ /^-([vq]?)(?:(C)(.*))?$/) {
     tryconfig => sub { die 'TODO' },
     make      => \&make,
     autoconf  => \&autoconf,
-    automake  => sub { die 'TODO' },
+    automake  => \&automake,
     '-h'      => \&help,
     '--help'  => \&help,
 }->{@ARGV ? $ARGV[0] : '-h'} // \&unknown)->(@ARGV);
@@ -343,6 +343,18 @@ sub make {
         die 'No rules available' unless @rules;
         build $rules[0];
     }
+}
+
+sub automake {
+    shift;
+    my (@targets, @options);
+    for (@_) {
+        if (/^--|=/) { push @options, $_ }
+        else { push @targets, $_ }
+    }
+
+    autoconf @options;
+    make @targets;
 }
 
 sub help { print $USAGE }
