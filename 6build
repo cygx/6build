@@ -86,7 +86,7 @@ sub autoconf {
     shift;
     parse_args(@_);
 
-    open my $fh, '<', 'auto.6' or die "Failed to open 'auto.6'";
+    open my $fh, '<', '6.auto' or die "6.auto: $!";
     while (<$fh>) {
         chomp;
         next if /^\s*$/;
