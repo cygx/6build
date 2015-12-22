@@ -29,9 +29,31 @@ Usage:
           -{v|q}C[ ]<DIR>  combined options
 EOU
 
-my ($build, %configs, %flags, %vars);
 my $verbose = 0;
 my $quiet = 0;
+
+if (@ARGV && $ARGV[0] =~ /^-([vq]?)(?:(C)(.*))?$/) {
+    shift @ARGV;
+    if ($1 eq 'v') { $verbose = 1 }
+    elsif ($1 eq 'q') { $quiet = 1 }
+    if (defined $2) {
+        my $dir = $3 || shift(@ARGV) || die "No dir passed to cd into";
+        chdir($dir) or die "Cannot cd into '$dir'";
+    }
+}
+
+({  status    => sub { die 'TODO' },
+    config    => sub { die 'TODO' },
+    reconfig  => sub { die 'TODO' },
+    tryconfig => sub { die 'TODO' },
+    make      => \&make,
+    autoconf  => \&autoconf,
+    automake  => sub { die 'TODO' },
+    '-h'      => \&help,
+    '--help'  => \&help,
+}->{@ARGV ? $ARGV[0] : '-h'} // \&unknown)->(@ARGV);
+
+my ($build, %configs, %flags, %vars);
 
 sub say { print @_, "\n" unless $quiet }
 sub cry { warn @_, "\n" unless $quiet }
@@ -246,6 +268,10 @@ sub autoconf {
     } sort keys %vars;
 }
 
+sub make {
+    die 'TODO';
+}
+
 sub help { print $USAGE }
 
 sub unknown {
@@ -253,27 +279,6 @@ sub unknown {
     my $type = /^-/ ? 'flag' : 'subcommand';
     die "Unknown $type '$_'";
 }
-
-if (@ARGV && $ARGV[0] =~ /^-([vq]?)(?:(C)(.*))?$/) {
-    shift @ARGV;
-    if ($1 eq 'v') { $verbose = 1 }
-    elsif ($1 eq 'q') { $quiet = 1 }
-    if (defined $2) {
-        my $dir = $3 || shift(@ARGV) || die "No dir passed to cd into";
-        chdir($dir) or die "Cannot cd into '$dir'";
-    }
-}
-
-({
-    status => sub { die 'TODO' },
-    config => sub { die 'TODO' },
-    reconfig => sub { die 'TODO' },
-    tryconfig => sub { die 'TODO' },
-    make => sub { die 'TODO' },
-    autoconf => \&autoconf,
-    automake => sub { die 'TODO' },
-    '-h' => \&help, '--help' => \&help,
-}->{@ARGV ? $ARGV[0] : '-h'} // \&unknown)->(@ARGV);
 
 __END__
 
