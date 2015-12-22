@@ -29,6 +29,11 @@ Usage:
           -{v|q}C[ ]<DIR>  combined options
 EOU
 
+my $AUTOFILE = '6.auto';
+my $CONFFILE = '6.config';
+my $STATFILE = '6.status';
+my $MAKEFILE = '6.make';
+
 my $verbose = 0;
 my $quiet = 0;
 
@@ -108,7 +113,7 @@ sub autoconf {
     shift;
     parse_args(@_);
 
-    open my $fh, '<', '6.auto' or die "6.auto: $!";
+    open my $fh, '<', $AUTOFILE or die "$AUTOFILE: $!";
     while (<$fh>) {
         chomp;
         next if /^\s*$/;
