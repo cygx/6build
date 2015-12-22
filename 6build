@@ -14,13 +14,13 @@ Usage:
   6build [<OPT>] config [<BUILD>]
          [--<CONFIG>=<NAME>...] [--<FLAG>...] [<VAR>=<VALUE>...]
 
-  6build [<OPT>] make <TARGET>...
+  6build [<OPT>] make [<TARGET>...]
 
   6build [<OPT>] {reconfig|tryconfig} [<BUILD>]
          [--<CONFIG>=<NAME>...] [--<FLAG>...] [<VAR>[~|+|-]=<VALUE>...]
          [--no-<CONFIG|FLAG|VAR>...]
 
-  6build [<OPT>] {autoconf|automake <TARGET>...}
+  6build [<OPT>] {autoconf|automake [<TARGET>...]}
          [--<CONFIG>=<NAME>...] [--<FLAG>...] [<VAR>=<VALUE>...]
 
   <OPT> = -C[ ]<DIR>       run in directory <DIR>
