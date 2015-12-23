@@ -5,8 +5,9 @@
 
 use strict;
 use warnings;
-
 use open ':encoding(utf8)';
+
+use Time::HiRes 'stat';
 
 my $USAGE = <<'EOU';
 Usage:
@@ -563,6 +564,26 @@ sub make {
         for @targets;
 
     for (@seq) {
+        my @in = @{$_->{in}};
+        my @out = @{$_->{out}};
+        if (@in && @out) {
+            my $oldest_out = 0+'inf';
+            for (@out) {
+                my $current = (stat $_)[9];
+                $oldest_out = $current
+                    if $current < $oldest_out;
+            }
+
+            my $newest_in = 0-'inf';
+            for (@in) {
+                my $current = (stat $_)[9];
+                $newest_in = $current
+                    if $current > $newest_in;
+            }
+
+            next if $newest_in < $oldest_out;
+        }
+
         for (@{$_->{body}}) {
             say $_;
             my @out = map { s/\r\n$/\n/r } qx/$_ 2>&1/;
