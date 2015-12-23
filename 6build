@@ -445,16 +445,56 @@ sub autoconf {
 }
 
 sub visit {
-    my ($seen, $made, $seq, $rule) = @_;
-    return if exists $seen->{$rule->{id}};
-    for (@{$rule->{in}}) {
-        next unless exists $rules_by_out_files{$_};
-        my @r = @{$rules_by_out_files{$_}};
-        die 'TODO' unless @r == 1;
-        visit($seen, $made, $seq, $r[0])
+    my ($seq, $visited, $made, $active, $rule) = @_;
+    my @in = @{$rule->{in}};
+    my @out = @{$rule->{out}};
+
+    for (@out) {
+        die "Cyclical build of file '$_' detected"
+            if exists $active->{$_};
     }
+
+    return if exists $visited->{$rule->{id}};
+
+    for (@out) {
+        die "Repeated build of file '$_' detected"
+            if exists $made->{$_};
+
+        $active->{$_} = 1;
+    }
+
+    for (@in) {
+        next unless exists $rules_by_out_files{$_};
+        my @candidates = @{$rules_by_out_files{$_}};
+        die "No candidates for building file '$_'"
+            if @candidates == 0;
+
+        my $next;
+        if (@candidates == 1) { $next = $candidates[0] }
+        else {
+            my $file = $_;
+            for (@candidates) {
+                my $name = $_->{name};
+                if (defined($name) && $file eq $name) {
+                    $next = $_;
+                    last;
+                }
+            }
+
+            die "Ambiguous rules for building file '$_'"
+                unless defined $next;
+        }
+
+        visit($seq, $visited, $made, $active, $next);
+    }
+
+    for (@out) {
+        $made->{$_} = 1;
+        delete $active->{$_};
+    }
+
+    $visited->{$rule->{id}} = 1;
     push @$seq, $rule;
-    $made->{$rule->{id}} = 1;
 }
 
 sub make {
@@ -518,11 +558,9 @@ sub make {
         push @targets, $rules[0];
     }
 
-    my @seq;
-    for (@targets) {
-        my (%seen, %made);
-        visit(\%seen, \%made, \@seq, $_);
-    }
+    my (@seq, %visited, %made, %active);
+    visit(\@seq, \%visited, \%made, \%active, $_)
+        for @targets;
 
     for (@seq) {
         for (@{$_->{body}}) {
