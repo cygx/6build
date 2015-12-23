@@ -61,7 +61,7 @@ if (@ARGV && $ARGV[0] =~ /^-([vq]?)(?:(C)(.*))?$/) {
 }->{@ARGV ? $ARGV[0] : '-h'} // \&unknown)->(@ARGV);
 
 my ($build, %configs, %flags, %vars);
-my (@rules, %named_rules, %output_files);
+my (@rules, %named_rules, %rules_by_out_files, %rules_by_in_files);
 
 sub say { print @_, "\n" unless $quiet }
 sub cry { warn @_, "\n" unless $quiet }
@@ -444,26 +444,17 @@ sub autoconf {
     } sort keys %vars;
 }
 
-my %visited;
-sub build {
-    my $rule = shift;
-
-    for (@{$rule->{out}}) {
-        die if exists $visited{$_};
-        $visited{$_} = 1;
-    }
-
+sub visit {
+    my ($seen, $made, $seq, $rule) = @_;
+    return if exists $seen->{$rule->{id}};
     for (@{$rule->{in}}) {
-        if (exists $output_files{$_}) {
-            die unless @{$output_files{$_}} == 1;
-            build($output_files{$_}->[0]);
-        }
-        else {
-            # TODO
-        }
+        next unless exists $rules_by_out_files{$_};
+        my @r = @{$rules_by_out_files{$_}};
+        die 'TODO' unless @r == 1;
+        visit($seen, $made, $seq, $r[0])
     }
-
-    say $_ for @{$rule->{body}};
+    push @$seq, $rule;
+    $made->{$rule->{id}} = 1;
 }
 
 sub make {
@@ -480,22 +471,24 @@ sub make {
         my @out = split /\|/, $rhs // '';
         my @body;
 
-        my %rule;
-        $rule{id} = $id++;
-        $rule{name} = length($name) ? $name : undef;
-        $rule{in} = \@in;
-        $rule{out} = \@out;
-        $rule{body} = \@body;
+        my $rule = {
+            id   => $id++,
+            name => length($name) ? $name : undef,
+            in   => \@in,
+            out  => \@out,
+            body => \@body,
+        };
 
         if (length($name)) {
             die "Redefinition of rule '$name'"
                 if exists $named_rules{$name};
 
-            $named_rules{$name} = \%rule;
+            $named_rules{$name} = $rule;
         }
 
-        push @{$output_files{$_}}, \%rule for @out;
-        push @rules, \%rule;
+        push @{$rules_by_out_files{$_}}, $rule for @out;
+        push @{$rules_by_in_files{$_}}, $rule for @in;
+        push @rules, $rule;
 
         while (<$fh>) {
             chomp;
@@ -505,13 +498,43 @@ sub make {
     }
     close $fh;
 
+    my @targets;
     if (@_) {
-        die 'TODO';
-        for (@_) {}
+        for (@_) {
+            if (exists $named_rules{$_}) {
+                push @targets, $named_rules{$_};
+            }
+            elsif (exists $rules_by_out_files{$_}) {
+                die "No unambiguous way to make target '$_'"
+                    unless @{$rules_by_out_files{$_}} == 1;
+
+                push @targets, $rules_by_out_files{$_}->[0];
+            }
+            else { die "Unknown target '$_'" }
+        }
     }
     else {
         die 'No rules available' unless @rules;
-        build $rules[0];
+        push @targets, $rules[0];
+    }
+
+    my @seq;
+    for (@targets) {
+        my (%seen, %made);
+        visit(\%seen, \%made, \@seq, $_);
+    }
+
+    for (@seq) {
+        for (@{$_->{body}}) {
+            say $_;
+            my @out = map { s/\r\n$/\n/r } qx/$_ 2>&1/;
+            my $code = $? >> 8;
+            if ($verbose) {
+                print "| $_" for @out
+            }
+
+            die 'TODO' if $code != 0;
+        }
     }
 }
 
