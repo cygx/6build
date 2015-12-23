@@ -566,6 +566,11 @@ sub make {
     for (@seq) {
         my @in = @{$_->{in}};
         my @out = @{$_->{out}};
+
+        my $name = $_->{name};
+        my $info = (defined($name) ? "$name " : '') . '(' .
+            (@out ? join(' ', @in).' -> '.join(' ', @out) : '') . ')';
+
         if (@in && @out) {
             my $oldest_out = 0+'inf';
             for (@out) {
@@ -581,18 +586,27 @@ sub make {
                     if $current > $newest_in;
             }
 
-            next if $newest_in < $oldest_out;
+            if ($newest_in < $oldest_out) {
+                note "skip $info";
+                next;
+            }
         }
 
-        for (@{$_->{body}}) {
-            say $_;
-            my @out = map { s/\r\n$/\n/r } qx/$_ 2>&1/;
-            my $code = $? >> 8;
-            if ($verbose) {
-                print "| $_" for @out
-            }
+        my @body = @{$_->{body}};
+        if (@body) {
+            note $info;
 
-            die 'TODO' if $code != 0;
+            for (@body) {
+                say $_;
+                my @out = map { s/\r\n$/\n/r } qx/$_ 2>&1/;
+                my $code = $? >> 8;
+                if ($verbose || $code != 0) {
+                    println $_ if $quiet;
+                    print "| $_" for @out;
+                }
+                die 'Build failure' if $code != 0;
+                note;
+            }
         }
     }
 }
