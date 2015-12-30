@@ -1,0 +1,3 @@
+--shell=*
+cmd /c echo --shell=cmd
+sh -c "echo --shell=sh"
