@@ -67,6 +67,7 @@ my (@rules, %named_rules, %rules_by_out_files, %rules_by_in_files);
 sub say { print @_, "\n" unless $quiet }
 sub cry { warn @_, "\n" unless $quiet }
 sub println { print @_, "\n" }
+sub fprintln { my $fh = shift; print $fh @_, "\n" }
 sub note { print @_, "\n" if $verbose }
 
 sub glob6_parse_string_to {
@@ -251,6 +252,41 @@ sub words {
     @words;
 }
 
+sub write_status {
+    open my $fh, '>', $STATFILE
+        or die "Failed to open '$STATFILE'";
+
+    fprintln $fh, $build
+        if defined $build;
+
+    fprintln $fh, $_ for map {
+        my ($k, $v) = ($_, $configs{$_});
+        "--$k=$v";
+    } sort keys %configs;
+
+    fprintln $fh, $_ for map {
+        my ($k, $v) = ($_, $flags{$_});
+        next unless $v;
+        "--$_";
+    } sort keys %flags;
+
+    fprintln $fh, $_ for map {
+        my ($k, $v) = ($_, $vars{$_});
+        "$k=$v";
+    } sort keys %vars;
+
+    close $fh;
+
+    say 'Configuration:';
+
+    open $fh, '<', $STATFILE
+        or die "Failed to open '$STATFILE'";
+
+    print $_ while <$fh>;
+
+    close $fh;
+}
+
 sub parse_args {
     # TODO: parse --no-
     for (@_) {
@@ -279,6 +315,16 @@ sub parse_args {
             $configs{$name} = $value;
         }
     }
+}
+
+sub parse_status {
+    open my $fh, '<', $STATFILE
+        or die "Failed to read status file '$STATFILE'";
+
+    chomp(my @lines = <$fh>);
+    close $fh;
+
+    parse_args @lines;
 }
 
 sub autoconf {
@@ -426,23 +472,7 @@ sub autoconf {
     }
     close $fh;
 
-    say 'Configuration:';
-
-    println $_ for map {
-        my ($k, $v) = ($_, $configs{$_});
-        "--$k=$v";
-    } sort keys %configs;
-
-    println $_ for map {
-        my ($k, $v) = ($_, $flags{$_});
-        next unless $v;
-        "--$_";
-    } sort keys %flags;
-
-    println $_ for map {
-        my ($k, $v) = ($_, $vars{$_});
-        "$k=$v";
-    } sort keys %vars;
+    write_status;
 }
 
 sub visit {
