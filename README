@@ -2,7 +2,7 @@ NAME
     6build - Yet another build system
 
 SYNOPSIS
-        6build status
+        6build gist
 
         6build config win32 --debug
         6build make test

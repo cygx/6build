@@ -1,6 +1,6 @@
 Usage:
 
-  6build [<OPT>] status
+  6build [<OPT>] [gist]
 
   6build [<OPT>] config [<BUILD>]
          [--<CONFIG>=<NAME>...] [--<FLAG>...] [<VAR>=<VALUE>...]

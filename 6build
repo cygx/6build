@@ -12,7 +12,7 @@ use Time::HiRes 'stat';
 my $USAGE = <<'EOU';
 Usage:
 
-  6build [<OPT>] status
+  6build [<OPT>] [gist]
 
   6build [<OPT>] config [<BUILD>]
          [--<CONFIG>=<NAME>...] [--<FLAG>...] [<VAR>=<VALUE>...]
@@ -50,7 +50,7 @@ if (@ARGV && $ARGV[0] =~ /^-([vq]?)(?:(C)(.*))?$/) {
     }
 }
 
-({  status    => sub { die 'TODO' },
+({  gist      => \&gist,
     config    => sub { die 'TODO' },
     reconfig  => sub { die 'TODO' },
     tryconfig => sub { die 'TODO' },
@@ -59,7 +59,7 @@ if (@ARGV && $ARGV[0] =~ /^-([vq]?)(?:(C)(.*))?$/) {
     automake  => \&automake,
     '-h'      => \&help,
     '--help'  => \&help,
-}->{@ARGV ? $ARGV[0] : '-h'} // \&unknown)->(@ARGV);
+}->{@ARGV ? $ARGV[0] : 'gist'} // \&unknown)->(@ARGV);
 
 my ($build, %configs, %flags, %vars);
 my (@rules, %named_rules, %rules_by_out_files, %rules_by_in_files);
@@ -254,7 +254,7 @@ sub words {
 
 sub write_status {
     open my $fh, '>', $STATFILE
-        or die "Failed to open '$STATFILE'";
+        or die "STATFILE: $!";
 
     fprintln $fh, $build
         if defined $build;
@@ -280,7 +280,7 @@ sub write_status {
     say 'Configuration:';
 
     open $fh, '<', $STATFILE
-        or die "Failed to open '$STATFILE'";
+        or die "$STATFILE: $!";
 
     print $_ while <$fh>;
 
@@ -319,7 +319,7 @@ sub parse_args {
 
 sub parse_status {
     open my $fh, '<', $STATFILE
-        or die "Failed to read status file '$STATFILE'";
+        or die "$STATFILE: $!";
 
     chomp(my @lines = <$fh>);
     close $fh;
@@ -653,6 +653,48 @@ sub automake {
     make @targets;
 }
 
+sub gist {
+    my (%builds, %configs, %flags, %vars, %evars, %goals);
+    open my $fh, '<', $CONFFILE
+        or die "$CONFFILE: $!";
+
+    while (<$fh>) {
+        if (/^build\h+(\w+)/) { $builds{$1} = undef }
+        elsif (/^config\h+(\w+)\h*=\h*(\w+(?:\h+\w+)*)/) {
+            @{$configs{$1}}{split /\h+/, $2} = ();
+        }
+        elsif (/^flag\h+(\w+)/) { $flags{$1} = undef }
+        elsif (/^goal\h+(\w+(?:\h+\w+)*)/) {
+            @goals{split /\h+/, $1} = ();
+        }
+        elsif (/\$(\w+)/) { $vars{$1} = undef }
+        elsif (/\$\((\w+)\)/) { $vars{$1} = undef }
+        elsif (/\$\*(\w+)/) { $evars{$1} = undef }
+        elsif (/\$\(\*(\w+)\)/) { $evars{$1} = undef }
+    }
+
+    close $fh;
+
+    println "build targets:\n  ", join(' ', sort keys %builds), "\n"
+        if %builds;
+
+    println "configuration options:\n", map {
+        "  --$_=<".join(' ', sort keys %{$configs{$_}}).">\n"
+    } sort keys %configs if %configs;
+
+    println "flags:\n  ", join(' ', map { "  --$_" } sort keys %flags), "\n"
+        if %flags;
+
+    println "variables:\n  ", join(' ', sort keys %vars), "\n"
+        if %vars;
+
+    println "environment variables:\n  ", join(' ', sort keys %evars), "\n"
+        if %evars;
+
+    println "goals:\n  ", join(' ', sort keys %goals), "\n"
+        if %goals;
+}
+
 sub help { print $USAGE }
 
 sub unknown {
@@ -673,7 +715,7 @@ __END__
 
 =head1 SYNOPSIS
 
-    6build status
+    6build gist
 
     6build config win32 --debug
     6build make test
