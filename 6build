@@ -654,12 +654,13 @@ sub automake {
 }
 
 sub gist {
-    my (%builds, %configs, %flags, %vars, %evars, %goals);
+    my ($main, %builds, %configs, %flags, %vars, %evars, %goals);
     open my $fh, '<', $CONFFILE
         or die "$CONFFILE: $!";
 
     while (<$fh>) {
-        if (/^build\h+(\w+)/) { $builds{$1} = undef }
+        if (/^main\h+(\w+)/) { $main = $1; $goals{$1} = undef }
+        elsif (/^build\h+(\w+)/) { $builds{$1} = undef }
         elsif (/^config\h+(\w+)\h*=\h*(\w+(?:\h+\w+)*)/) {
             @{$configs{$1}}{split /\h+/, $2} = ();
         }
@@ -691,8 +692,9 @@ sub gist {
     println "environment variables:\n  ", join(' ', sort keys %evars), "\n"
         if %evars;
 
-    println "goals:\n  ", join(' ', sort keys %goals), "\n"
-        if %goals;
+    println "make goals:\n  ", join(' ', map {
+        $_ eq $main ? "$_*" : $_;
+    } sort keys %goals), "\n" if %goals;
 }
 
 sub help { print $USAGE }
